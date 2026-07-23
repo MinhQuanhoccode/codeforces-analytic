@@ -1,0 +1,44 @@
+# ==========================================
+# 1. Virtual Environment & Python Runtime
+# ==========================================
+.venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# ==========================================
+# 2. Bytecode & Caches (Rác biên dịch)
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+
+# ==========================================
+# 3. Environment Variables & Secrets
+# ==========================================
+.env
+.env.*
+*.env
+
+# NGOẠI LỆ: Cho phép push file mẫu cấu hình (Template/Example)
+!.env.example
+!.env.template
+
+# ==========================================
+# 4. IDEs & Editors
+# ==========================================
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+.idea/
+*.swp
+
+# ==========================================
+# 5. OS Generated Files
+# ==========================================
+Thumbs.db
+DS_Store
