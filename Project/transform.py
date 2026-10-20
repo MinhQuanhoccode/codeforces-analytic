@@ -5,6 +5,7 @@ from extract import fetch_submissions, HANDLE   # tái sử dụng hàm Extract
 
 
 def transform(submissions: list[dict]) -> pd.DataFrame:
+    if not submissions: return pd.DataFrame()
     # Bước 1: list dict -> DataFrame. Mỗi dict thành 1 hàng, mỗi key thành 1 cột.
     df = pd.DataFrame(submissions)
 

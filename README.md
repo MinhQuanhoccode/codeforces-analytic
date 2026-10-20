@@ -1,6 +1,6 @@
 # Codeforces Analytics — ETL Pipeline
 
-Pipeline dữ liệu tự động: Trích xuất lịch sử nộp bài từ Codeforces API → Làm sạch và chuẩn hóa schema bằng pandas → Nạp và đồng bộ vào PostgreSQL (Supabase) bằng SQLAlchemy.
+Pipeline ETL: Trích xuất lịch sử nộp bài từ Codeforces API → Làm sạch và chuẩn hóa schema bằng pandas → Nạp và đồng bộ vào PostgreSQL (Supabase) bằng SQLAlchemy.
 
 **Mục tiêu**: Dự án thực hành kỹ thuật Data Engineering nền tảng — xử lý dữ liệu bán cấu trúc (nested JSON), thiết kế đường ống dữ liệu có tính lũy kế/chạy lại an toàn (Idempotent Pipeline), tối ưu hóa kiểu dữ liệu bộ nhớ và thao tác cơ sở dữ liệu quan hệ qua SQL Engine.
 
@@ -17,7 +17,7 @@ codeforces-analytic/
 ├── .gitignore             # Cấu hình loại trừ cache, bytecode và secrets
 ├── README.md              # Tài liệu kiến trúc và hướng dẫn vận hành
 └── Project/
-    ├── config.py          # Điểm tập trung biến cấu hình (HANDLE, DATABASE_URL)
+    ├── config.py          # Điểm tập trung biến cấu hình (DATABASE_URL, HANDLE, COUNT)
     ├── extract.py          # Tầng trích xuất dữ liệu từ Codeforces REST API
     ├── transform.py        # Tầng biến đổi, flatten JSON và chuẩn hóa schema
     ├── load.py             # Tầng nạp dữ liệu, thực thi UPSERT vào database
@@ -80,17 +80,18 @@ copy ..\.env.example ..\.env
 
 # macOS/Linux:
 cp ../.env.example ../.env
-```
-
-Mở file `../.env` và cập nhật thông tin kết nối Supabase thật:
+Mở file `../.env` và cập nhật chuỗi kết nối Supabase thật:
 
 ```env
-DATABASE_URL=postgresql://postgres.<PROJECT_ID>:<PASSWORD>@<HOST>:5432/postgres
-CF_HANDLE=Minwannacry
+DATABASE_URL=postgresql+psycopg://postgres.<PROJECT_ID>:<PASSWORD>@<HOST>:5432/postgres
 ```
 
-`CF_HANDLE` là handle Codeforces muốn crawl — nếu không khai báo, `config.py` sẽ tự dùng giá trị mặc định `"Minwannacry"`.
+Handle Codeforces và số lượng submission cần lấy được cấu hình trực tiếp trong `Project/config.py`:
 
+```python
+HANDLE = "Minwanncry"   # Codeforces handle cần lấy dữ liệu
+COUNT = 100               # Số submission mới nhất cần lấy
+```
 ### Bước 3: Kích hoạt Pipeline
 
 ```bash
@@ -102,8 +103,8 @@ python main.py
 ## 4. Quyết định kiến trúc (Architecture Decisions)
 
 * **Phân tách trách nhiệm (Separation of Concerns):** Phân chia rõ rệt 3 tầng **Extract → Transform → Load** độc lập. Mỗi module chỉ thực thi một chức năng duy nhất, không tự động chạy code khi được `import`. File `main.py` đóng vai trò nhạc trưởng (Orchestrator) duy nhất điều phối luồng chạy.
-* **Cấu hình tập trung (Centralized Configuration):** Tất cả các tham số toàn cục (`HANDLE`, chuỗi kết nối DB) được đọc qua biến môi trường tại `config.py`, có giá trị mặc định dự phòng nếu `.env` chưa khai báo — tránh việc rải rác biến môi trường qua nhiều file.
-* **Tôn trọng Rate Limit:** Codeforces áp dụng rate limit ~1 request/giây. Pipeline cấu hình gọi tập trung và thiết lập `timeout` nghiêm ngặt cho mỗi request.
+* **Cấu hình tập trung (Centralized Configuration):** Thông tin nhạy cảm (`DATABASE_URL`) nằm trong `.env` và không được đưa lên Git. Các tham số chạy (`HANDLE`, `COUNT`) nằm trong `config.py`. `main.py` chỉ đọc từ `config.py`, tránh rải rác cấu hình qua nhiều file.
+* **Rate Limit & Timeout:** Codeforces giới hạn khoảng 1 request / 2 giây. Mỗi lần chạy pipeline chỉ gọi API một lần và có `timeout=10` để tránh treo tiến trình. Khi cần lấy lượng dữ liệu lớn (phân trang), sẽ bổ sung `sleep` giữa các request.
 * **Cơ chế Idempotent UPSERT:** Thay vì dùng `INSERT` thuần túy hoặc `DO NOTHING`, hệ thống sử dụng cú pháp `ON CONFLICT (id) DO UPDATE` để vừa tránh duplicate bản ghi, vừa tự động làm mới trạng thái chấm bài (`verdict`) khi chạy lại nhiều lần.
 
 ---
@@ -174,3 +175,5 @@ Payload trả về từ API Codeforces chứa các cấu trúc JSON lồng nhau 
 * [ ] **Automated Testing:** Bổ sung bộ kiểm thử tự động (Unit Test với `pytest`) cho logic flatten của hàm `transform()`.
 * [ ] **Batch Processing:** Chia nhỏ payload thành các batch nhỏ hơn khi số lượng submission tăng lên hàng ngàn bản ghi để kiểm soát lượng RAM tiêu thụ.
 * [ ] **Orchestration nâng cao:** Tích hợp công cụ lập lịch định kỳ (cron job hoặc Apache Airflow / Prefect) để pipeline tự động thu thập dữ liệu hàng ngày.
+* [ ] **Incremental Load:** Chỉ lấy các submission có `id` lớn hơn `id` mới nhất trong DB thay vì lấy lại `COUNT` bài gần nhất mỗi lần chạy.
+* [ ] **Xử lý danh sách rỗng:** Trả DataFrame rỗng khi handle chưa có submission nào, để `transform()` không bị `KeyError`.
